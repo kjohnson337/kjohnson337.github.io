@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Hugo 0.81.0" />
+
+
+<title>Machine Learning and Men&#39;s NCAA Basketball Tournament - Kaitlynn Johnson&#39;s Sport Site</title>
+<meta property="og:title" content="Machine Learning and Men&#39;s NCAA Basketball Tournament - Kaitlynn Johnson&#39;s Sport Site">
+
+
+  <link href='/favicon.ico' rel='icon' type='image/x-icon'/>
+
+
+
+  
+
+
+
+
+
+
+
+
+<link href='//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css' rel='stylesheet' type='text/css' />
+
+
+
+<link rel="stylesheet" href="/css/fonts.css" media="all">
+<link rel="stylesheet" href="/css/main.css" media="all">
+
+
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header class="header">
+        <nav class="nav">
+  <a href="/" class="nav-logo">
+    <img src="/images/logo.png"
+         width="50"
+         height="50"
+         alt="Logo">
+  </a>
+
+  <ul class="nav-links">
+    
+    <li><a href="/about/">About</a></li>
+    
+    <li><a href="https://github.com/kjohnson337">GitHub</a></li>
+    
+    <li><a href="https://twitter.com/rstudio">Twitter</a></li>
+    
+  </ul>
+</nav>
+
+      </header>
+
+
+<main class="content" role="main">
+
+  <article class="article">
+    
+    <span class="article-duration">15 min read</span>
+    
+
+    <h1 class="article-title">Machine Learning and Men&#39;s NCAA Basketball Tournament</h1>
+
+    
+    <span class="article-date">2021-03-22</span>
+    
+
+    <div class="article-content">
+      
+<script src="/2021/03/22/machine-learning-and-men-s-ncaa-basketball-tournament/index_files/header-attrs/header-attrs.js"></script>
+
+
+<p>In order to fill out my bracket for the NCAA Mens Basketball Tournament I used machine learning as part of my Advanced Sports Data Analysis. While I’m involved in athletics (soccer and cross country/track in high school and now both cross country and track at the collegiate level) I know very little about basketball and don’t follow the sport much, besides seeing scores of the Nebraska women’s team on Twitter. Thus, most of my decision making with the bracket will be based off of the model, and not any other outside information. In the past when I’ve filled out brackets I’ve gone with the team’s seed coming into the tournament, if I thought the school was from a cool place, or if I had any personal connection to the school.</p>
+<p>The model I decided to use was a logistical regression model. A logistical regression model is used to find the probability of a class of event, such as win/lose or pass/fail. In this instance it will be estimating the probability of teams winning their game.</p>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre><code>## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.0 ──</code></pre>
+<pre><code>## ✓ ggplot2 3.3.3     ✓ purrr   0.3.4
+## ✓ tibble  3.0.5     ✓ dplyr   1.0.3
+## ✓ tidyr   1.1.2     ✓ stringr 1.4.0
+## ✓ readr   1.3.1     ✓ forcats 0.5.0</code></pre>
+<pre><code>## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+## x dplyr::filter() masks stats::filter()
+## x dplyr::lag()    masks stats::lag()</code></pre>
+<pre class="r"><code>library(tidymodels)</code></pre>
+<pre><code>## ── Attaching packages ────────────────────────────────────── tidymodels 0.1.2 ──</code></pre>
+<pre><code>## ✓ broom     0.7.3      ✓ recipes   0.1.15
+## ✓ dials     0.0.9      ✓ rsample   0.0.8 
+## ✓ infer     0.5.4      ✓ tune      0.1.2 
+## ✓ modeldata 0.1.0      ✓ workflows 0.2.1 
+## ✓ parsnip   0.1.5      ✓ yardstick 0.0.7</code></pre>
+<pre><code>## ── Conflicts ───────────────────────────────────────── tidymodels_conflicts() ──
+## x scales::discard() masks purrr::discard()
+## x dplyr::filter()   masks stats::filter()
+## x recipes::fixed()  masks stringr::fixed()
+## x dplyr::lag()      masks stats::lag()
+## x yardstick::spec() masks readr::spec()
+## x recipes::step()   masks stats::step()</code></pre>
+<pre class="r"><code>library(zoo)</code></pre>
+<pre><code>## 
+## Attaching package: &#39;zoo&#39;</code></pre>
+<pre><code>## The following objects are masked from &#39;package:base&#39;:
+## 
+##     as.Date, as.Date.numeric</code></pre>
+<pre class="r"><code>set.seed(1234)</code></pre>
+<p>The data set used contains information on every men’s basketball game from 2015-2021.</p>
+<pre class="r"><code>games &lt;- read_csv(&quot;~/Box/Advanced Sport Data/cbblogs1521.csv copy_5.zip&quot;)</code></pre>
+<pre><code>## Parsed with column specification:
+## cols(
+##   .default = col_double(),
+##   Season = col_character(),
+##   Date = col_date(format = &quot;&quot;),
+##   TeamFull = col_character(),
+##   Opponent = col_character(),
+##   HomeAway = col_character(),
+##   W_L = col_character(),
+##   URL = col_character(),
+##   Conference = col_character(),
+##   Team = col_character()
+## )</code></pre>
+<pre><code>## See spec(...) for full column specifications.</code></pre>
+<p>What I decided to do was look into the team’s rolling mean possessions and rolling mean points per possession. I also decided to make the k equal 6. Six seemed like an appropriate number as it took in a considerate amount of games so that any short-term problems wouldn’t be a giant change to the average, yet it account for any upward improvement or downward trends for the team.</p>
+<pre class="r"><code>games2 &lt;- games %&gt;% mutate(
+  Possessions = .5*(TeamFGA - TeamOffRebounds + TeamTurnovers + (.475 * TeamFTA)) + .5*(OpponentFGA - OpponentOffRebounds + OpponentTurnovers + (.475 * OpponentFTA)),
+  PPP = TeamScore/Possessions) %&gt;%
+  group_by(Team, Season) %&gt;%
+  mutate(
+  Rolling_Mean_Possessions = rollmean(Possessions, k = 6, fill=Possessions),
+  Rolling_Mean_PPP = rollmean(PPP, k=6, fill=PPP)
+  ) %&gt;% ungroup() %&gt;% 
+  mutate(
+    Location = case_when(
+    str_trim(HomeAway) == &quot;@&quot; ~ &quot;A&quot;,
+    str_trim(HomeAway) == &quot;N&quot; ~ &quot;N&quot;,
+    TRUE ~ &quot;H&quot;
+  ),
+ Outcome = case_when(
+  grepl(&quot;W&quot;, W_L) ~ &quot;W&quot;, 
+  grepl(&quot;L&quot;, W_L) ~ &quot;L&quot;
+ )
+) %&gt;%
+  mutate(Outcome = as.factor(Outcome))</code></pre>
+<p>This selects the information we need. In this instance we want the season, team, date, opponent, outcome, Rolling means for possessions, rolling means for PPP, and the team SRS.</p>
+<pre class="r"><code>selectedgames &lt;- games2 %&gt;% select(Season, Team, Date, Opponent, Outcome, Rolling_Mean_Possessions, Rolling_Mean_PPP, TeamSRS)</code></pre>
+<p>This renamed to have the opponent scores:</p>
+<pre class="r"><code>opponentgames &lt;- selectedgames %&gt;% select(-Opponent) %&gt;% rename %&gt;% rename(Opponent = Team, Opponent_Rolling_Mean_Possessions = Rolling_Mean_Possessions, Opponent_Rolling_Mean_PPP = Rolling_Mean_PPP, OpponentSRS = TeamSRS) %&gt;% select(-Outcome) </code></pre>
+<p>This will join the database with opponent information with the selectedgames database.</p>
+<pre class="r"><code>bothsides &lt;- selectedgames %&gt;% left_join(opponentgames, by=c(&quot;Opponent&quot;, &quot;Date&quot;, &quot;Season&quot;)) %&gt;% na.omit()</code></pre>
+<p>Now we will construct the logistical regression.</p>
+<div id="logistical-regression" class="section level2">
+<h2>Logistical Regression</h2>
+<pre class="r"><code>log_split &lt;- initial_split(bothsides, prop = .8)
+log_train &lt;- training(log_split)
+log_test &lt;- testing(log_split)</code></pre>
+<p>This splits the data into training and testing.</p>
+<pre class="r"><code>log_recipe &lt;- 
+  recipe(Outcome ~ ., data = log_train) %&gt;% 
+  update_role(Team, Opponent, Date, Season, new_role = &quot;ID&quot;) %&gt;%
+  step_normalize(all_predictors())
+
+summary(log_recipe)</code></pre>
+<pre><code>## # A tibble: 11 x 4
+##    variable                          type    role      source  
+##    &lt;chr&gt;                             &lt;chr&gt;   &lt;chr&gt;     &lt;chr&gt;   
+##  1 Season                            nominal ID        original
+##  2 Team                              nominal ID        original
+##  3 Date                              date    ID        original
+##  4 Opponent                          nominal ID        original
+##  5 Rolling_Mean_Possessions          numeric predictor original
+##  6 Rolling_Mean_PPP                  numeric predictor original
+##  7 TeamSRS                           numeric predictor original
+##  8 Opponent_Rolling_Mean_Possessions numeric predictor original
+##  9 Opponent_Rolling_Mean_PPP         numeric predictor original
+## 10 OpponentSRS                       numeric predictor original
+## 11 Outcome                           nominal outcome   original</code></pre>
+<p>It is noted here that the predictors are Rolling mean possessions, rolling mean points per possession, team SRS, and the same for the opponent.</p>
+<p>This defines the model:</p>
+<pre class="r"><code>log_mod &lt;- 
+  logistic_reg() %&gt;% 
+  set_engine(&quot;glm&quot;) %&gt;%
+  set_mode(&quot;classification&quot;)</code></pre>
+<p>This is the workflow:</p>
+<pre class="r"><code>log_workflow &lt;- 
+  workflow() %&gt;% 
+  add_model(log_mod) %&gt;% 
+  add_recipe(log_recipe)</code></pre>
+<pre class="r"><code>log_fit &lt;- 
+  log_workflow %&gt;% 
+  fit(data = log_train)</code></pre>
+<p>Now we will evaluate the fit:</p>
+<pre class="r"><code>trainpredict &lt;- log_fit %&gt;% predict(new_data = log_train) %&gt;%
+  bind_cols(log_train)
+
+trainpredict</code></pre>
+<pre><code>## # A tibble: 38,657 x 12
+##    .pred_class Season Team  Date       Opponent Outcome Rolling_Mean_Po…
+##    &lt;fct&gt;       &lt;chr&gt;  &lt;chr&gt; &lt;date&gt;     &lt;chr&gt;    &lt;fct&gt;              &lt;dbl&gt;
+##  1 L           2014-… Abil… 2014-11-19 Tulsa    L                   79.6
+##  2 L           2014-… Abil… 2014-11-22 Duquesne L                   71.9
+##  3 L           2014-… Abil… 2014-11-29 UC-Rive… L                   71.9
+##  4 L           2014-… Abil… 2014-12-04 Sacrame… W                   69.3
+##  5 L           2014-… Abil… 2014-12-06 Houston  L                   65.7
+##  6 L           2014-… Abil… 2014-12-17 Loyola … L                   66.5
+##  7 L           2014-… Abil… 2014-12-23 Arkansa… W                   68.6
+##  8 L           2014-… Abil… 2014-12-28 Grand C… L                   70.7
+##  9 W           2014-… Abil… 2015-01-04 Central… W                   70.0
+## 10 W           2014-… Abil… 2015-01-10 Nicholl… W                   70.9
+## # … with 38,647 more rows, and 5 more variables: Rolling_Mean_PPP &lt;dbl&gt;,
+## #   TeamSRS &lt;dbl&gt;, Opponent_Rolling_Mean_Possessions &lt;dbl&gt;,
+## #   Opponent_Rolling_Mean_PPP &lt;dbl&gt;, OpponentSRS &lt;dbl&gt;</code></pre>
+<pre class="r"><code>trainpredict &lt;- log_fit %&gt;% predict(new_data = log_train, type=&quot;prob&quot;) %&gt;%
+  bind_cols(trainpredict)
+
+trainpredict</code></pre>
+<pre><code>## # A tibble: 38,657 x 14
+##    .pred_L .pred_W .pred_class Season Team  Date       Opponent Outcome
+##      &lt;dbl&gt;   &lt;dbl&gt; &lt;fct&gt;       &lt;chr&gt;  &lt;chr&gt; &lt;date&gt;     &lt;chr&gt;    &lt;fct&gt;  
+##  1   0.935  0.0652 L           2014-… Abil… 2014-11-19 Tulsa    L      
+##  2   0.952  0.0483 L           2014-… Abil… 2014-11-22 Duquesne L      
+##  3   0.891  0.109  L           2014-… Abil… 2014-11-29 UC-Rive… L      
+##  4   0.897  0.103  L           2014-… Abil… 2014-12-04 Sacrame… W      
+##  5   0.926  0.0744 L           2014-… Abil… 2014-12-06 Houston  L      
+##  6   0.970  0.0305 L           2014-… Abil… 2014-12-17 Loyola … L      
+##  7   0.503  0.497  L           2014-… Abil… 2014-12-23 Arkansa… W      
+##  8   0.803  0.197  L           2014-… Abil… 2014-12-28 Grand C… L      
+##  9   0.175  0.825  W           2014-… Abil… 2015-01-04 Central… W      
+## 10   0.421  0.579  W           2014-… Abil… 2015-01-10 Nicholl… W      
+## # … with 38,647 more rows, and 6 more variables:
+## #   Rolling_Mean_Possessions &lt;dbl&gt;, Rolling_Mean_PPP &lt;dbl&gt;, TeamSRS &lt;dbl&gt;,
+## #   Opponent_Rolling_Mean_Possessions &lt;dbl&gt;, Opponent_Rolling_Mean_PPP &lt;dbl&gt;,
+## #   OpponentSRS &lt;dbl&gt;</code></pre>
+<pre class="r"><code>metrics(trainpredict, Outcome, .pred_class)</code></pre>
+<pre><code>## # A tibble: 2 x 3
+##   .metric  .estimator .estimate
+##   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt;
+## 1 accuracy binary         0.735
+## 2 kap      binary         0.469</code></pre>
+<p>This above shows that the model has a 73 percent accuracy rate with the training data.</p>
+<pre class="r"><code>trainpredict %&gt;%
+  conf_mat(Outcome, .pred_class)</code></pre>
+<pre><code>##           Truth
+## Prediction     L     W
+##          L 14094  5135
+##          W  5123 14305</code></pre>
+<p>This looks at win predictions:</p>
+<pre class="r"><code>roc_auc(trainpredict, truth = Outcome, .pred_W)</code></pre>
+<pre><code>## # A tibble: 1 x 3
+##   .metric .estimator .estimate
+##   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+## 1 roc_auc binary         0.181</code></pre>
+<p>This looks at loss predictions:</p>
+<pre class="r"><code>roc_auc(trainpredict, truth = Outcome, .pred_L)</code></pre>
+<pre><code>## # A tibble: 1 x 3
+##   .metric .estimator .estimate
+##   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+## 1 roc_auc binary         0.819</code></pre>
+<p>Overall, the model seems to favor predicting a team will lose over wins; it is much more confident in saying it will be a loss than a win.</p>
+<p>Now we will look at the test data:</p>
+</div>
+<div id="looking-at-test-data" class="section level2">
+<h2>Looking at test data</h2>
+<pre class="r"><code>testpredict &lt;- log_fit %&gt;% predict(new_data = log_test) %&gt;%
+  bind_cols(log_test)
+
+testpredict</code></pre>
+<pre><code>## # A tibble: 9,663 x 12
+##    .pred_class Season Team  Date       Opponent Outcome Rolling_Mean_Po…
+##    &lt;fct&gt;       &lt;chr&gt;  &lt;chr&gt; &lt;date&gt;     &lt;chr&gt;    &lt;fct&gt;              &lt;dbl&gt;
+##  1 W           2014-… Abil… 2014-12-22 South C… W                   67.4
+##  2 L           2014-… Abil… 2015-03-05 Incarna… L                   79.2
+##  3 L           2014-… Air … 2015-02-04 New Mex… W                   59.4
+##  4 L           2014-… Air … 2015-02-21 Colorad… L                   64.3
+##  5 W           2014-… Akron 2014-12-04 Western… W                   66.1
+##  6 W           2014-… Akron 2015-01-06 Western… W                   69.5
+##  7 L           2014-… Akron 2015-01-17 Central… W                   67.8
+##  8 W           2014-… Akron 2015-03-09 Norther… W                   62.8
+##  9 L           2014-… Alab… 2014-11-25 Jackson… L                   66.2
+## 10 L           2014-… Alab… 2014-12-19 Marquet… L                   60.8
+## # … with 9,653 more rows, and 5 more variables: Rolling_Mean_PPP &lt;dbl&gt;,
+## #   TeamSRS &lt;dbl&gt;, Opponent_Rolling_Mean_Possessions &lt;dbl&gt;,
+## #   Opponent_Rolling_Mean_PPP &lt;dbl&gt;, OpponentSRS &lt;dbl&gt;</code></pre>
+<pre class="r"><code>testpredict &lt;- log_fit %&gt;% predict(new_data = log_test, type=&quot;prob&quot;) %&gt;%
+  bind_cols(testpredict)
+
+testpredict</code></pre>
+<pre><code>## # A tibble: 9,663 x 14
+##    .pred_L .pred_W .pred_class Season Team  Date       Opponent Outcome
+##      &lt;dbl&gt;   &lt;dbl&gt; &lt;fct&gt;       &lt;chr&gt;  &lt;chr&gt; &lt;date&gt;     &lt;chr&gt;    &lt;fct&gt;  
+##  1  0.418   0.582  W           2014-… Abil… 2014-12-22 South C… W      
+##  2  0.845   0.155  L           2014-… Abil… 2015-03-05 Incarna… L      
+##  3  0.603   0.397  L           2014-… Air … 2015-02-04 New Mex… W      
+##  4  0.847   0.153  L           2014-… Air … 2015-02-21 Colorad… L      
+##  5  0.0463  0.954  W           2014-… Akron 2014-12-04 Western… W      
+##  6  0.384   0.616  W           2014-… Akron 2015-01-06 Western… W      
+##  7  0.635   0.365  L           2014-… Akron 2015-01-17 Central… W      
+##  8  0.200   0.800  W           2014-… Akron 2015-03-09 Norther… W      
+##  9  0.741   0.259  L           2014-… Alab… 2014-11-25 Jackson… L      
+## 10  0.982   0.0183 L           2014-… Alab… 2014-12-19 Marquet… L      
+## # … with 9,653 more rows, and 6 more variables: Rolling_Mean_Possessions &lt;dbl&gt;,
+## #   Rolling_Mean_PPP &lt;dbl&gt;, TeamSRS &lt;dbl&gt;,
+## #   Opponent_Rolling_Mean_Possessions &lt;dbl&gt;, Opponent_Rolling_Mean_PPP &lt;dbl&gt;,
+## #   OpponentSRS &lt;dbl&gt;</code></pre>
+<pre class="r"><code>metrics(testpredict, Outcome, .pred_class)</code></pre>
+<pre><code>## # A tibble: 2 x 3
+##   .metric  .estimator .estimate
+##   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt;
+## 1 accuracy binary         0.737
+## 2 kap      binary         0.475</code></pre>
+<p>The above shows that there is a 73% rate of accuracy with the testing data.</p>
+<pre class="r"><code>testpredict %&gt;%
+  conf_mat(Outcome, .pred_class)</code></pre>
+<pre><code>##           Truth
+## Prediction    L    W
+##          L 3567 1216
+##          W 1322 3558</code></pre>
+<pre class="r"><code>roc_auc(testpredict, truth = Outcome, .pred_W)</code></pre>
+<pre><code>## # A tibble: 1 x 3
+##   .metric .estimator .estimate
+##   &lt;chr&gt;   &lt;chr&gt;          &lt;dbl&gt;
+## 1 roc_auc binary         0.182</code></pre>
+<pre class="r"><code>roc_data &lt;- roc_curve(testpredict, truth = Outcome, .pred_L) 
+roc_data %&gt;%  
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path() +
+  geom_abline(lty = 3) + 
+  coord_equal()</code></pre>
+<p><img src="/2021/03/22/machine-learning-and-men-s-ncaa-basketball-tournament/index_files/figure-html/unnamed-chunk-23-1.png" width="672" /></p>
+</div>
+<div id="play-in-games" class="section level2">
+<h2>Play In Games</h2>
+<p>To apply this model we will first look at the play in games.</p>
+<pre class="r"><code>playin &lt;- tibble(
+  Team=&quot;Norfolk State&quot;,
+  Opponent=&quot;Appalachian State&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Wichita State&quot;,
+  Opponent=&quot;Drake&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Mount St. Mary&#39;s&quot;,
+  Opponent=&quot;Texas Southern&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Michigan State&quot;,
+  Opponent=&quot;UCLA&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+)</code></pre>
+<pre class="r"><code>playingames &lt;- selectedgames %&gt;% group_by(Team) %&gt;% filter(Date == max(Date), Season == &quot;2020-2021&quot;) %&gt;% select(-Date, -Opponent, -Outcome) %&gt;% right_join(playin)</code></pre>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre class="r"><code>playingames &lt;- opponentgames %&gt;% group_by(Opponent) %&gt;% filter(Date == max(Date)) %&gt;% ungroup() %&gt;% select(-Season, -Date) %&gt;% right_join(playingames, by=c(&quot;Opponent&quot;))</code></pre>
+<pre class="r"><code>playinround &lt;- log_fit %&gt;% predict(new_data = playingames) %&gt;%
+  bind_cols(playingames) 
+
+log_fit %&gt;% predict(new_data = playinround, type=&quot;prob&quot;) %&gt;%
+  bind_cols(playinround) %&gt;% select(Team, .pred_class, Opponent, .pred_W)</code></pre>
+<pre><code>## # A tibble: 4 x 4
+##   Team             .pred_class Opponent          .pred_W
+##   &lt;chr&gt;            &lt;fct&gt;       &lt;chr&gt;               &lt;dbl&gt;
+## 1 Norfolk State    L           Appalachian State   0.493
+## 2 Wichita State    L           Drake               0.323
+## 3 Mount St. Mary&#39;s W           Texas Southern      0.626
+## 4 Michigan State   L           UCLA                0.350</code></pre>
+<p>From here it is seen that Norfolk State only has a 49 percent chance of winning the game. Thus, in my model I will insert Appalachian State in the model for the next region.</p>
+</div>
+<div id="west-regional-first-round" class="section level2">
+<h2>West Regional First Round</h2>
+<p>West Regional First Round:</p>
+<pre class="r"><code># Correct spellings of play in games
+# Norfolk State or Appalachian State in first game against Gonzaga
+# Wichita State or Drake against USC
+
+west &lt;- tibble(
+  Team=&quot;Gonzaga&quot;,
+  Opponent=&quot;Appalachian State&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Oklahoma&quot;,
+  Opponent=&quot;Missouri&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Creighton&quot;,
+  Opponent=&quot;UC-Santa Barbara&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Virginia&quot;,
+  Opponent=&quot;Ohio&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Southern California&quot;,
+  Opponent=&quot;Drake&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Kansas&quot;,
+  Opponent=&quot;Eastern Washington&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Oregon&quot;,
+  Opponent=&quot;Virginia Commonwealth&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+) %&gt;% add_row(
+  Team=&quot;Iowa&quot;,
+  Opponent=&quot;Grand Canyon&quot;,
+  Date = as.Date(&quot;2021-03-19&quot;)
+)</code></pre>
+<pre class="r"><code>west &lt;- selectedgames %&gt;% group_by(Team) %&gt;% filter(Date == max(Date), Season == &quot;2020-2021&quot;) %&gt;% select(-Date, -Opponent, -Outcome) %&gt;% right_join(west)</code></pre>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre class="r"><code>west &lt;- opponentgames %&gt;% group_by(Opponent) %&gt;% filter(Date == max(Date)) %&gt;% ungroup()  %&gt;% select(-Season, -Date) %&gt;% right_join(west, by=c(&quot;Opponent&quot;)) %&gt;% select(Team, everything())</code></pre>
+<pre class="r"><code>westround_1 &lt;- log_fit %&gt;% predict(new_data = west) %&gt;%
+  bind_cols(west) 
+
+log_fit %&gt;% predict(new_data = westround_1, type=&quot;prob&quot;) %&gt;%
+  bind_cols(westround_1) %&gt;% select(Team, .pred_class, Opponent, .pred_W)</code></pre>
+<pre><code>## # A tibble: 8 x 4
+##   Team                .pred_class Opponent              .pred_W
+##   &lt;chr&gt;               &lt;fct&gt;       &lt;chr&gt;                   &lt;dbl&gt;
+## 1 Gonzaga             W           Appalachian State       0.993
+## 2 Creighton           W           UC-Santa Barbara        0.901
+## 3 Southern California W           Drake                   0.719
+## 4 Kansas              W           Eastern Washington      0.922
+## 5 Iowa                W           Grand Canyon            0.938
+## 6 Oklahoma            W           Missouri                0.576
+## 7 Virginia            W           Ohio                    0.892
+## 8 Oregon              W           Virginia Commonwealth   0.535</code></pre>
+<p>With each advancement in the tournament I’ll use the previous information to fill out the next round.</p>
+<p>West Regional Second Round:</p>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 4 x 4
+##   Team                .pred_class Opponent .pred_W
+##   &lt;chr&gt;               &lt;fct&gt;       &lt;chr&gt;      &lt;dbl&gt;
+## 1 Oregon              L           Iowa       0.126
+## 2 Southern California W           Kansas     0.659
+## 3 Gonzaga             W           Oklahoma   0.831
+## 4 Creighton           W           Virginia   0.544</code></pre>
+</div>
+<div id="west-sweet-16" class="section level2">
+<h2>West Sweet 16</h2>
+<p>The West Sweet 16</p>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   Team                .pred_class Opponent  .pred_W
+##   &lt;chr&gt;               &lt;fct&gt;       &lt;chr&gt;       &lt;dbl&gt;
+## 1 Gonzaga             W           Creighton   0.674
+## 2 Southern California L           Iowa        0.265</code></pre>
+</div>
+<div id="west-elite-8" class="section level2">
+<h2>West Elite 8</h2>
+<p>The West Elite 8</p>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 1 x 4
+##   Team    .pred_class Opponent .pred_W
+##   &lt;chr&gt;   &lt;fct&gt;       &lt;chr&gt;      &lt;dbl&gt;
+## 1 Gonzaga W           Iowa       0.545</code></pre>
+<p>Gonzaga will move on to the final four</p>
+<p>Now the East:</p>
+</div>
+<div id="east" class="section level2">
+<h2>East</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 8 x 4
+##   Team            .pred_class Opponent                  .pred_W
+##   &lt;chr&gt;           &lt;fct&gt;       &lt;chr&gt;                       &lt;dbl&gt;
+## 1 Texas           W           Abilene Christian           0.829
+## 2 Colorado        W           Georgetown                  0.533
+## 3 Alabama         W           Iona                        0.970
+## 4 Connecticut     L           Maryland                    0.368
+## 5 Michigan        W           Mount St. Mary&#39;s            0.986
+## 6 Florida State   W           North Carolina-Greensboro   0.919
+## 7 Louisiana State W           St. Bonaventure             0.804
+## 8 Brigham Young   W           UCLA                        0.561</code></pre>
+</div>
+<div id="east-second-round" class="section level2">
+<h2>East Second Round</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 4 x 4
+##   Team          .pred_class Opponent        .pred_W
+##   &lt;chr&gt;         &lt;fct&gt;       &lt;chr&gt;             &lt;dbl&gt;
+## 1 Maryland      L           Alabama           0.442
+## 2 Colorado      L           Florida State     0.265
+## 3 Michigan      W           Louisiana State   0.661
+## 4 Brigham Young L           Texas             0.494</code></pre>
+<p>While the machine said BYU had only a 49% chance of winning I decided to move them to the Sweet 16, since he model has an accuracy rate of only 72% and their track and cross country teams did really well the previous weekend at NCAA’s.</p>
+</div>
+<div id="east-sweet-16" class="section level2">
+<h2>East Sweet 16</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   Team          .pred_class Opponent      .pred_W
+##   &lt;chr&gt;         &lt;fct&gt;       &lt;chr&gt;           &lt;dbl&gt;
+## 1 Brigham Young L           Alabama         0.268
+## 2 Michigan      W           Florida State   0.747</code></pre>
+</div>
+<div id="west-elite-8-1" class="section level2">
+<h2>West Elite 8</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 1 x 4
+##   Team     .pred_class Opponent .pred_W
+##   &lt;chr&gt;    &lt;fct&gt;       &lt;chr&gt;      &lt;dbl&gt;
+## 1 Michigan W           Alabama    0.620</code></pre>
+<p>Michigan will go into the final four</p>
+</div>
+<div id="south-first-round" class="section level2">
+<h2>South (First Round)</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 8 x 4
+##   Team           .pred_class Opponent      .pred_W
+##   &lt;chr&gt;          &lt;fct&gt;       &lt;chr&gt;           &lt;dbl&gt;
+## 1 Arkansas       L           Colgate         0.417
+## 2 Baylor         W           Hartford        0.990
+## 3 Purdue         W           North Texas     0.926
+## 4 Ohio State     W           Oral Roberts    0.970
+## 5 Texas Tech     W           Utah State      0.530
+## 6 Florida        W           Virginia Tech   0.554
+## 7 Villanova      W           Winthrop        0.813
+## 8 North Carolina L           Wisconsin       0.254</code></pre>
+</div>
+<div id="south-second-round" class="section level2">
+<h2>South Second Round</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 4 x 4
+##   Team       .pred_class Opponent   .pred_W
+##   &lt;chr&gt;      &lt;fct&gt;       &lt;chr&gt;        &lt;dbl&gt;
+## 1 Texas Tech L           Colgate      0.203
+## 2 Florida    L           Ohio State   0.293
+## 3 Villanova  L           Purdue       0.261
+## 4 Baylor     W           Wisconsin    0.666</code></pre>
+</div>
+<div id="south-sweet-16" class="section level2">
+<h2>South Sweet 16</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   Team    .pred_class Opponent   .pred_W
+##   &lt;chr&gt;   &lt;fct&gt;       &lt;chr&gt;        &lt;dbl&gt;
+## 1 Colgate L           Ohio State   0.434
+## 2 Baylor  W           Purdue       0.550</code></pre>
+</div>
+<div id="south-elite-8" class="section level2">
+<h2>South Elite 8</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 1 x 4
+##   Team    .pred_class Opponent .pred_W
+##   &lt;chr&gt;   &lt;fct&gt;       &lt;chr&gt;      &lt;dbl&gt;
+## 1 Colgate L           Baylor     0.333</code></pre>
+<p>Baylor will go into the final four</p>
+<p>Finally, the Midwest region:</p>
+</div>
+<div id="midwest-first-round" class="section level2">
+<h2>Midwest (first round)</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 8 x 4
+##   Team            .pred_class Opponent        .pred_W
+##   &lt;chr&gt;           &lt;fct&gt;       &lt;chr&gt;             &lt;dbl&gt;
+## 1 Houston         W           Cleveland State   0.983
+## 2 Illinois        W           Drexel            0.973
+## 3 Loyola (IL)     W           Georgia Tech      0.507
+## 4 Oklahoma State  W           Liberty           0.663
+## 5 West Virginia   W           Morehead State    0.916
+## 6 Tennessee       W           Oregon State      0.947
+## 7 Clemson         W           Rutgers           0.566
+## 8 San Diego State L           Syracuse          0.498</code></pre>
+</div>
+<div id="midwest-second-round" class="section level2">
+<h2>Midwest Second Round</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 4 x 4
+##   Team      .pred_class Opponent       .pred_W
+##   &lt;chr&gt;     &lt;fct&gt;       &lt;chr&gt;            &lt;dbl&gt;
+## 1 Rutgers   L           Houston          0.221
+## 2 Illinois  W           Loyola (IL)      0.769
+## 3 Tennessee W           Oklahoma State   0.840
+## 4 Syracuse  W           West Virginia    0.529</code></pre>
+</div>
+<div id="midwest-sweet-16" class="section level2">
+<h2>midwest Sweet 16</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   Team     .pred_class Opponent  .pred_W
+##   &lt;chr&gt;    &lt;fct&gt;       &lt;chr&gt;       &lt;dbl&gt;
+## 1 Syracuse L           Houston     0.342
+## 2 Illinois W           Tennessee   0.574</code></pre>
+</div>
+<div id="midwest-elite-8" class="section level2">
+<h2>Midwest Elite 8</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 1 x 4
+##   Team    .pred_class Opponent .pred_W
+##   &lt;chr&gt;   &lt;fct&gt;       &lt;chr&gt;      &lt;dbl&gt;
+## 1 Houston L           Illinois   0.344</code></pre>
+<p>Illinois will go into the final four</p>
+<p>Now I will enter all the previous teams mentioned into the Final Four:</p>
+</div>
+<div id="final-four" class="section level2">
+<h2>Final Four</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   Team     .pred_class Opponent .pred_W
+##   &lt;chr&gt;    &lt;fct&gt;       &lt;chr&gt;      &lt;dbl&gt;
+## 1 Illinois L           Baylor     0.455
+## 2 Gonzaga  W           Michigan   0.524</code></pre>
+<p>And now I will out Baylor and Gonzaga against each other in the finals:</p>
+</div>
+<div id="finals" class="section level2">
+<h2>Finals</h2>
+<pre><code>## Joining, by = &quot;Team&quot;</code></pre>
+<pre><code>## # A tibble: 1 x 4
+##   Team   .pred_class Opponent .pred_W
+##   &lt;chr&gt;  &lt;fct&gt;       &lt;chr&gt;      &lt;dbl&gt;
+## 1 Baylor L           Gonzaga    0.495</code></pre>
+<p>I have Gonzaga winning the entire men’s tournament.</p>
+</div>
+<div id="how-is-it-going" class="section level2">
+<h2>How is it going?</h2>
+<p>Overall, my bracket formed from the model is turning out okay. As of March 23 I am tied for first in my class with 99.4% in the ESPN brackets. What has caused the most damage to my brackets is both Illinois and Colgate losing in their first games, as I had Illinois going to the Final Four and Colgate advancing to the Sweet 16.</p>
+</div>
+
+    </div>
+  </article>
+
+  
+
+
+</main>
+
+      <footer class="footer">
+        <ul class="footer-links">
+          <li>
+            <a href="/index.xml" type="application/rss+xml" target="_blank">RSS feed</a>
+          </li>
+          <li>
+            <a href="https://gohugo.io/" class="footer-links-kudos">Made with <img src="/images/hugo-logo.png" alt="Img link to Hugo website" width="22" height="22"></a>
+          </li>
+        </ul>
+      </footer>
+
+    </div>
+    
+
+
+
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+
+
+
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/languages/r.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/languages/yaml.min.js"></script>
+<script>hljs.configure({languages: []}); hljs.initHighlightingOnLoad();</script>
+
+
+
+    
+
+    
+  </body>
+</html>
+

@@ -6,16 +6,14 @@
     <description>Recent content in R on Kaitlynn Johnson&#39;s Sport Site</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Tue, 01 Dec 2020 21:13:14 -0500</lastBuildDate><atom:link href="/categories/r/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Mon, 22 Mar 2021 00:00:00 +0000</lastBuildDate><atom:link href="/categories/r/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>Hello R Markdown</title>
-      <link>/2020/12/01/hello-r-markdown/</link>
-      <pubDate>Tue, 01 Dec 2020 21:13:14 -0500</pubDate>
+      <title>Machine Learning and Men&#39;s NCAA Basketball Tournament</title>
+      <link>/2021/03/22/machine-learning-and-men-s-ncaa-basketball-tournament/</link>
+      <pubDate>Mon, 22 Mar 2021 00:00:00 +0000</pubDate>
       
-      <guid>/2020/12/01/hello-r-markdown/</guid>
-      <description>R Markdown This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see http://rmarkdown.rstudio.com.
-You can embed an R code chunk like this:
-summary(cars) ## speed dist ## Min. : 4.0 Min. : 2.00 ## 1st Qu.:12.0 1st Qu.: 26.00 ## Median :15.0 Median : 36.00 ## Mean :15.4 Mean : 42.</description>
+      <guid>/2021/03/22/machine-learning-and-men-s-ncaa-basketball-tournament/</guid>
+      <description>In order to fill out my bracket for the NCAA Mens Basketball Tournament I used machine learning as part of my Advanced Sports Data Analysis. While I’m involved in athletics (soccer and cross country/track in high school and now both cross country and track at the collegiate level) I know very little about basketball and don’t follow the sport much, besides seeing scores of the Nebraska women’s team on Twitter.</description>
     </item>
     
   </channel>
